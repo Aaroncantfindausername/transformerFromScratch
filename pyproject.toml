@@ -1,17 +1,44 @@
 [project]
-name = "nanogpt"
+name = "transformerFromScratch"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-authors = [
-    { name = "Aaron Zhou", email = "aaronylzhou@gmail.com" }
-]
+authors = [{ name = "Aaron Zhou", email = "aaronylzhou@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+  "ipython>=9.16.1",
+  "matplotlib>=3.11.1",
+  "numpy>=2.5.2",
+  "pandas>=3.0.5",
+  "scikit-learn>=1.9.0",
+  "torch>=2.13.0",
+  "transformers>=5.15.1",
+]
 
 [project.scripts]
-nanogpt = "nanogpt:main"
+transformerFromScratch = "transformerFromScratch:main"
 
 [build-system]
 requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
+
+
+[tool.basedpyright]
+typeCheckingMode = "standard" # Keeps good checks like unused imports, basic type mismatches
+pythonVersion = 3.12
+pythonPlatform = "Linux"
+# But relax the data-science specific ones:
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportMissingTypeStubs = false
+reportInvalidCast = false
+reportAttributeAccessIssue = "warning"
+reportArgumentType = "warning"
+venvPath = "."
+venv = ".venv"
+# Keep the helpful ones:
+reportUnusedImport = "warning"    # Good to catch
+reportGeneralTypeIssues = "error" # Catches real bugs (e.g., int vs str)
+[tool.ruff]
+line-length = 80
