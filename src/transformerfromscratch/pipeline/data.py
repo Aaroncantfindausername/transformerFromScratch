@@ -1,31 +1,62 @@
+from pathlib import Path
 from typing import Tuple
 import torch
 from torch.utils.data import TensorDataset
 from sklearn.model_selection import train_test_split
 from torch.utils.data.dataloader import DataLoader
+import torch.nn.functional as F
 
 
-def load_data(file: str) -> str:
+def get_project_root() -> Path:
+    # 1. Determine the starting directory
+    try:
+        # Works when running as a standard Python script
+        start_path = Path(__file__).resolve().parent
+    except NameError:
+        # Fallback for IPython / Jupyter Notebooks
+        start_path = Path.cwd()
+
+    # 2. Traverse up the tree to find the root marker
+    # You can change "pyproject.toml" to ".git" or a custom ".root" file
+    for parent in start_path.parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+
+    # Fallback if no marker is found (e.g., in a Docker container without .git)
+    return start_path
+
+
+project_root = get_project_root()
+config = torch.load(project_root / "models" / "model_config.pth")
+
+
+def load_data(file: str | Path) -> str:
     with open(file) as f:
         text = f.read()
     return text
 
 
-def encode_text(text: str) -> Tuple[list[int], dict[int, str]]:
+def get_encoder_decoder(
+    text: str,
+) -> Tuple[list[int], dict[str, int], dict[int, str]]:
     chars = sorted(list(set(text)))
     char_to_i = {c: i for i, c in enumerate(chars)}
     i_to_char = {i: c for i, c in enumerate(chars)}
     ints = [char_to_i[c] for c in text]
-    return ints, i_to_char
+    return ints, char_to_i, i_to_char
 
 
 def decode_to_text(ints: list[int], dict: dict[int, str]) -> str:
     return "".join([dict[i] for i in ints])
 
 
+def encode_text(text: str, dict: dict[str, int]) -> list[int]:
+    return [dict[c] for c in text]
+
+
 def train_val_test_split(
     encoded_text: list[int],
-    context_length: int,
+    context_window: int,
     batch_size: int,
     val_split: float = 0.15,
     test_split: float = 0.15,
@@ -36,9 +67,9 @@ def train_val_test_split(
 ]:
     X = []
     y = []
-    for i in range(len(encoded_text) - context_length - 1):
-        X.append(encoded_text[i : i + context_length])
-        y.append(encoded_text[i + 1 : i + context_length + 1])
+    for i in range(len(encoded_text) - context_window - 1):
+        X.append(encoded_text[i : i + context_window])
+        y.append(encoded_text[i + 1 : i + context_window + 1])
     X_trainval, X_test, y_trainval, y_test = train_test_split(
         X, y, train_size=1 - val_split - test_split, shuffle=True
     )

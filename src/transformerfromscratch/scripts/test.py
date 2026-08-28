@@ -1,24 +1,45 @@
-from transformerfromscratch.models.transformer import MultiHeadedSelfAttention
+from pathlib import Path
+from transformerfromscratch.models.transformer import (
+    TinyGPT,
+)
 import torch
 import numpy as np
 
-torch.manual_seed(67)
-np.random.seed(67)
-d_model = 8
-d_q = 4
-n_heads = 2
-batch_size = 1
-seq_len = 3
-dropout = 0.0
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = MultiHeadedSelfAttention(
-    d_model, d_q, seq_len, batch_size, dropout, n_heads, device, False
+from transformerfromscratch.pipeline.data import (
+    decode_to_text,
+    encode_text,
+    get_encoder_decoder,
+    get_project_root,
+    load_data,
 )
-input = torch.tensor(
-    [1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0],
-    dtype=torch.float32,
-    device=device,
-).reshape(batch_size, seq_len, d_model)
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+project_root = get_project_root()
+config = torch.load(project_root / "models" / "model_config.pth")
+model_state_dict = torch.load(project_root / "models" / "model.pth")
+torch.manual_seed(config["seed"])
+np.random.seed(config["seed"])
+
+dataset_path = project_root / "datasets" / "tiny_shakespear.txt"
+text = load_data(dataset_path)
+encoded_text, encoder, decoder = get_encoder_decoder(text)
+model = TinyGPT(
+    config["d_model"],
+    config["d_q"],
+    config["dropout"],
+    config["context_window"],
+    config["batch_size"],
+    config["mlp_layers"],
+    config["mlp_activation"],
+    config["n_attn_heads"],
+    config["n_blocks"],
+    len(decoder),
+    device,
+)
+model.load_state_dict(model_state_dict)
 model.eval()
-output = model(input)
-pass
+x = torch.tensor(encoded_text[:32], device=device).unsqueeze(0)
+output = model.generate(x, 1000)
+print(decode_to_text(output.squeeze().tolist(), decoder))

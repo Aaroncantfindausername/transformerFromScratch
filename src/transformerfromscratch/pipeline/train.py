@@ -19,7 +19,7 @@ def train_epoch(
         targets = targets.to(device)
         optimizer.zero_grad()
         outputs = model(inputs)
-        loss = criterion(outputs, targets)
+        loss = criterion(outputs.view(-1, outputs.shape[-1]), targets.view(-1))
         batch_loss = loss.item()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -43,7 +43,9 @@ def evaluate(
                 targets.to(device),
             )
             outputs = model(inputs)
-            loss = criterion(outputs, targets)
+            loss = criterion(
+                outputs.view(-1, outputs.shape[-1]), targets.view(-1)
+            )
             running_loss += loss.item() * inputs.size(0)
     avg_loss: float = running_loss / len(loader.dataset)
     return avg_loss

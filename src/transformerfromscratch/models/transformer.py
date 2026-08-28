@@ -135,8 +135,12 @@ class MLP(nn.Module):
             layers.append(self.get_activation())
             layers.append(nn.Dropout(p_dropout))
             prev_out_dim = next_dim
-        layers.append(nn.Linear(prev_out_dim, d_model))
+        layers.append(nn.Linear(prev_out_dim, d_model, device=device))
         self.net = nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x :(B, S, d)
+        return self.net(x)
 
     def get_activation(self) -> nn.Module:
         if self.activation == "relu":
@@ -161,8 +165,8 @@ class DecoderBlock(nn.Module):
         device: str | torch.device,
     ) -> None:
         super().__init__()
-        self.ln_1 = LayerNorm(d_model)
-        self.ln_2 = LayerNorm(d_model)
+        self.ln_1 = LayerNorm(d_model, device=device)
+        self.ln_2 = LayerNorm(d_model, device=device)
         self.attention = MultiHeadedSelfAttention(
             d_model,
             d_q,
@@ -196,9 +200,12 @@ class TinyGPT(nn.Module):
         vocab_size: int,
         device: str | torch.device,
     ):
+        super().__init__()
         self.context_window = context_window
-        self.token_embedding = nn.Embedding(vocab_size, d_model)
-        self.positional_embedding = nn.Embedding(context_window, d_model)
+        self.token_embedding = nn.Embedding(vocab_size, d_model, device=device)
+        self.positional_embedding = nn.Embedding(
+            context_window, d_model, device=device
+        )
         self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList(
             [
@@ -216,11 +223,13 @@ class TinyGPT(nn.Module):
                 for _ in range(n_blocks)
             ]
         )
-        self.ln_f = LayerNorm(d_model)
-        self.lm_head = nn.Linear(d_model, vocab_size)
+        self.ln_f = LayerNorm(d_model, device=device)
+        self.lm_head = nn.Linear(d_model, vocab_size, device=device)
         self.token_embedding.weight = self.lm_head.weight  # Weight tying
 
-    def forward(self, idx: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, idx: torch.Tensor, inference: bool = False
+    ) -> torch.Tensor:
         t = idx.size()[-1]
         device = idx.device
         assert t <= self.context_window, (
@@ -233,8 +242,10 @@ class TinyGPT(nn.Module):
         for block in self.blocks:
             x = block(x)
             x = self.ln_f(x)
-        # preserve time dimension with [-1] for optimisation
-        logits = self.lm_head(x[:, [-1], :])
+        if inference:
+            logits = self.lm_head(x[:, -1, :])
+        else:
+            logits = self.lm_head(x)
         return logits
 
     @torch.no_grad()
@@ -252,13 +263,13 @@ class TinyGPT(nn.Module):
                 if idx.size(-1) <= self.context_window
                 else idx[:, -self.context_window :]
             )
-            logits = self.forward(idx_crop)
-            logits = logits[:, -1, :] / temperature
+            logits = self.forward(idx_crop, inference=True)
+            logits = logits / temperature
             assert top_k <= logits.size(-1), (
                 "top k should be less than vocab size"
             )
             v, _ = torch.topk(logits, top_k)
-            logits[logits < v[: [-1]]] = -float("Inf")
+            logits[logits < v[:, [-1]]] = -float("Inf")
             probs = torch.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, 1)
             idx = torch.concat((idx, idx_next), dim=1)
