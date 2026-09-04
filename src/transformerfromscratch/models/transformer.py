@@ -46,6 +46,8 @@ class SelfAttention(nn.Module):
 
 class MultiHeadedSelfAttention(nn.Module):
     tril: torch.Tensor
+    cos: torch.Tensor
+    sin: torch.Tensor
 
     def __init__(
         self,
@@ -56,6 +58,7 @@ class MultiHeadedSelfAttention(nn.Module):
         dropout: float,
         n_heads: int,
         device: str | torch.device,
+        rope_freq_base: int = 10000,
         flash_attention: bool = True,
     ):
         super().__init__()
@@ -69,6 +72,14 @@ class MultiHeadedSelfAttention(nn.Module):
         self.flash = flash_attention
         self.register_buffer(
             "tril", torch.tril(torch.ones((seq_len, seq_len), device=device))
+        )
+        d = torch.arange(d_q // n_heads // 2).unsqueeze(0)  # (1, d_head/2)
+        s = torch.arange(seq_len).unsqueeze(1)  # (S, 1)
+        self.register_buffer(
+            "cos", torch.cos(s * rope_freq_base ** (-d / d_model)).to(device)
+        )
+        self.register_buffer(
+            "sin", torch.sin(s * rope_freq_base ** (-d / d_model)).to(device)
         )
         self.p_dropout = dropout
         self.attention_dropout = nn.Dropout(dropout)
@@ -90,6 +101,8 @@ class MultiHeadedSelfAttention(nn.Module):
         v = v.view(
             B, S, self.n_heads, self.d_model // self.n_heads
         )  # B,S, n_heads, d_model_head
+        q = apply_rope(q, self.cos[:S, :], self.sin[:S, :])
+        k = apply_rope(k, self.cos[:S, :], self.sin[:S, :])
         if self.flash:
             y = torch.nn.functional.scaled_dot_product_attention(
                 q.transpose(1, 2),
@@ -175,7 +188,7 @@ class DecoderBlock(nn.Module):
             dropout,
             n_attn_heads,
             device,
-            True,
+            flash_attention=True,
         )
         self.mlp = MLP(d_model, mlp_layers, mlp_activation, dropout, device)
 
@@ -203,9 +216,6 @@ class TinyGPT(nn.Module):
         super().__init__()
         self.context_window = context_window
         self.token_embedding = nn.Embedding(vocab_size, d_model, device=device)
-        self.positional_embedding = nn.Embedding(
-            context_window, d_model, device=device
-        )
         self.dropout = nn.Dropout(dropout)
         self.blocks = nn.ModuleList(
             [
@@ -231,14 +241,11 @@ class TinyGPT(nn.Module):
         self, idx: torch.Tensor, inference: bool = False
     ) -> torch.Tensor:
         t = idx.size()[-1]
-        device = idx.device
         assert t <= self.context_window, (
             f"Cannot forward sequence of size {t} when context window is only {self.context_window}"
         )
-        pos = torch.arange(0, t, dtype=torch.long, device=device)
         tok_emb = self.token_embedding(idx)
-        pos_emb = self.positional_embedding(pos)
-        x = self.dropout(tok_emb + pos_emb)
+        x = self.dropout(tok_emb)
         for block in self.blocks:
             x = block(x)
             x = self.ln_f(x)
@@ -275,3 +282,18 @@ class TinyGPT(nn.Module):
             idx = torch.concat((idx, idx_next), dim=1)
 
         return idx
+
+
+def apply_rope(
+    x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor
+) -> torch.Tensor:
+    assert x.ndim == 4
+    # x: B,S,h,d
+    # cos: S,d
+    # sin: S,d
+    x = x.transpose(1, 2)  # x: B,h,S,d
+    d = x.shape[-1] // 2
+    x1, x2 = x[..., :d], x[..., d:]
+    y1 = x1 * cos - x2 * sin
+    y2 = x1 * sin + x2 * cos
+    return torch.cat([y1, y2], dim=-1).transpose(1, 2)

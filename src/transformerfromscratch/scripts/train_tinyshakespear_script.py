@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from torch.nn.modules import CrossEntropyLoss
 import torch
 from torch import optim
@@ -26,11 +24,11 @@ config = {
     "mlp_activation": "relu",
     "n_attn_heads": 4,
     "n_blocks": 4,
-    "lr": 1e-4,
+    "lr": 3e-4,
     "weight_decay": 1e-5,
-    "epochs": 1000,
+    "epochs": 200,
     "early_stop_patience": 20,
-    "scheduler_patience": 5,
+    "scheduler_patience": 7,
 }
 project_root = get_project_root()
 dataset_path = project_root / "datasets" / "tiny_shakespear.txt"
