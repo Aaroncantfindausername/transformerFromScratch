@@ -1,3 +1,6 @@
+import json
+import pickle
+
 from torch.nn.modules import CrossEntropyLoss
 import torch
 from torch import optim
@@ -33,6 +36,9 @@ config = {
 project_root = get_project_root()
 dataset_path = project_root / "datasets" / "tiny_shakespear.txt"
 text = load_data(dataset_path)
+with open(project_root / "models" / "tokeniser.pkl", "rb") as f:
+    tokeniser = pickle.load(f)
+
 encoded_text, _, decoder = get_encoder_decoder(text)
 train_loader, val_loader, test_loader = train_val_test_split(
     encoded_text,
