@@ -1,18 +1,15 @@
-from typing import Dict, List, Tuple
-
-
 class BasicTokeniser:
-    vocab: Dict[int, bytes]
-    merges: Dict[Tuple[int, int], int]
+    vocab: dict[int, bytes]
+    merges: dict[tuple[int, int], int]
 
     def __init__(self, vocab_size: int) -> None:
         self.vocab_size = vocab_size
         assert vocab_size > 256, "Vocab should include at least all byte values"
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         utf8_bytes = list(text.encode("utf-8"))
         for pair, replacement in self.merges.items():
-            new_bytes: List[int] = []
+            new_bytes: list[int] = []
             i = 0
             while i < len(utf8_bytes):
                 if (
@@ -27,23 +24,23 @@ class BasicTokeniser:
             utf8_bytes = new_bytes
         return utf8_bytes
 
-    def decode(self, tokens: List[int]):
+    def decode(self, tokens: list[int]):
         return b"".join([self.vocab[t] for t in tokens]).decode(
             "utf-8", errors="ignore"
         )
 
     def train(self, text: str) -> None:
-        merges: Dict[Tuple[int, int], int] = {}
+        merges: dict[tuple[int, int], int] = {}
         utf8_bytes = list(text.encode("utf-8"))
         replacement_byte = 256
         num_merges = self.vocab_size - 256
         while num_merges > 0:
-            pair_counts: Dict[Tuple[int, int], int] = {}
+            pair_counts: dict[tuple[int, int], int] = {}
             for pair in zip(utf8_bytes, utf8_bytes[1:]):
                 pair_counts[pair] = pair_counts.get(pair, 0) + 1
             max_pair = max(pair_counts, key=lambda x: pair_counts[x])
             merges[max_pair] = replacement_byte
-            new_bytes: List[int] = []
+            new_bytes: list[int] = []
             i = 0
             while i < len(utf8_bytes):
                 if (

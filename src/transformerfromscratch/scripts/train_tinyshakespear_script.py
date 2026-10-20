@@ -1,9 +1,10 @@
 import json
 import pickle
 
-from torch.nn.modules import CrossEntropyLoss
 import torch
 from torch import optim
+from torch.nn.modules import CrossEntropyLoss
+
 from transformerfromscratch.models.transformer import (
     TinyGPT,
 )
@@ -15,21 +16,20 @@ from transformerfromscratch.pipeline.data import (
 )
 from transformerfromscratch.pipeline.train import train_full
 
-
 config = {
     "seed": 67,
     "d_model": 64,
     "d_q": 32,
-    "dropout": 0.3,
+    "dropout": 0.4,
     "context_window": 32,
-    "batch_size": 1024,
+    "batch_size": 2048,
     "mlp_layers": 3,
     "mlp_activation": "relu",
     "n_attn_heads": 4,
     "n_blocks": 4,
     "lr": 3e-4,
     "weight_decay": 1e-5,
-    "epochs": 200,
+    "epochs": 1000,
     "early_stop_patience": 20,
     "scheduler_patience": 7,
 }
@@ -39,7 +39,9 @@ text = load_data(dataset_path)
 with open(project_root / "models" / "tokeniser.pkl", "rb") as f:
     tokeniser = pickle.load(f)
 
-encoded_text, _, decoder = get_encoder_decoder(text)
+
+encoded_text = tokeniser.encode(text)
+print("Text encoded")
 train_loader, val_loader, test_loader = train_val_test_split(
     encoded_text,
     context_window=config["context_window"],
@@ -58,7 +60,7 @@ model = TinyGPT(
     config["mlp_activation"],
     config["n_attn_heads"],
     config["n_blocks"],
-    len(decoder),
+    tokeniser.vocab_size,
     device,
 )
 torch.compile(model)

@@ -22,9 +22,9 @@ np.random.seed(config["seed"])
 
 dataset_path = project_root / "datasets" / "tiny_shakespear.txt"
 text = load_data(dataset_path)
-tokeniser = BasicTokeniser(300)
+tokeniser = BasicTokeniser(260)
 tokeniser.train(text)
-encoded_text = tokeniser.encode(text[:200])
+encoded_text = tokeniser.encode(text[:100])
 decoded_text = tokeniser.decode(encoded_text)
 print(encoded_text)
 print(decoded_text)
